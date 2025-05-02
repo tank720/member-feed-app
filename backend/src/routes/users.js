@@ -64,29 +64,53 @@ router.post('/:userId/follow', auth, async (req, res) => {
       return res.status(400).json({ message: 'Cannot follow yourself' });
     }
 
-    // Check if already following
-    const existingFollow = await Follow.findOne({
+    // Create new follow relationship
+    await Follow.create({
+      followerId: req.user.id,
+      followingId: userId
+    });
+    res.json({ message: 'Followed successfully' });
+  } catch (error) {
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      return res.status(400).json({ message: 'Already following this user' });
+    }
+    console.error('Error following user:', error);
+    res.status(500).json({ message: 'Error following user' });
+  }
+});
+
+// Unfollow a user
+router.delete('/:userId/unfollow', auth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Check if user exists
+    const userToUnfollow = await User.findByPk(userId);
+    if (!userToUnfollow) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Prevent self-unfollowing
+    if (userId === req.user.id.toString()) {
+      return res.status(400).json({ message: 'Cannot unfollow yourself' });
+    }
+
+    // Check if following and unfollow
+    const result = await Follow.destroy({
       where: {
         followerId: req.user.id,
         followingId: userId
       }
     });
 
-    if (existingFollow) {
-      // If already following, unfollow
-      await existingFollow.destroy();
-      res.json({ message: 'Unfollowed successfully' });
-    } else {
-      // Create new follow relationship
-      await Follow.create({
-        followerId: req.user.id,
-        followingId: userId
-      });
-      res.json({ message: 'Followed successfully' });
+    if (result === 0) {
+      return res.status(400).json({ message: 'Not following this user' });
     }
+
+    res.json({ message: 'Unfollowed successfully' });
   } catch (error) {
-    console.error('Error following user:', error);
-    res.status(500).json({ message: 'Error following user' });
+    console.error('Error unfollowing user:', error);
+    res.status(500).json({ message: 'Error unfollowing user' });
   }
 });
 
