@@ -27,7 +27,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Static files for profile photos
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+app.use('/profile_photos', express.static(path.join(__dirname, '../profile_photos')));
 
 // Routes
 app.use('/api/auth', authRoutes);
