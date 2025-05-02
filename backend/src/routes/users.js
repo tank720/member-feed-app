@@ -29,13 +29,22 @@ router.get('/', auth, async (req, res) => {
     });
 
     // Transform the response to match frontend expectations
+    const serverAddress = process.env.SERVER_URL || `http://localhost:${process.env.PORT || 3000}`;
     const transformedUsers = users.map(user => {
       const userData = user.toJSON();
+      // Handle avatar URL - if photoUrl exists and is a full URL, use it directly
+      // otherwise construct the URL using serverAddress
+      let avatar = userData.photoUrl;
+      if (!avatar) {
+        avatar = `${serverAddress}/profile_photos/default.png`;
+      } else if (!avatar.startsWith('http')) {
+        avatar = `${serverAddress}${avatar}`;
+      }
       return {
         id: userData.id,
         name: userData.name,
         bio: userData.bio,
-        avatar: userData.photoUrl,
+        avatar,
         interests: userData.interests || [],
         isFollowing: userData.followers.some(follower => follower.id === req.user.id)
       };
