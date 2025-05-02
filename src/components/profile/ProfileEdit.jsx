@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Container,
@@ -9,8 +9,11 @@ import {
   Button,
   Chip,
   Stack,
-  Alert
+  Alert,
+  IconButton,
+  Input
 } from '@mui/material';
+import PhotoCamera from '@mui/icons-material/PhotoCamera';
 import { useAuth } from '../../contexts/AuthContext';
 
 const ProfileEdit = () => {
@@ -26,6 +29,8 @@ const ProfileEdit = () => {
   const [newInterest, setNewInterest] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     fetchProfile();
@@ -79,6 +84,67 @@ const ProfileEdit = () => {
       ...prev,
       interests: prev.interests.filter(interest => interest !== interestToRemove)
     }));
+  };
+
+  // Handle file upload
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    setUploading(true);
+    setError('');
+
+    try {
+      const formData = new FormData();
+      formData.append('photo', file);
+
+      const response = await fetch('/api/profile/upload-photo', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: formData
+      });
+
+      if (!response.ok) throw new Error('Failed to upload photo');
+
+      const data = await response.json();
+      setFormData(prev => ({ ...prev, photoUrl: data.photoUrl }));
+    } catch (err) {
+      setError('Error uploading photo');
+      console.error('Error:', err);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // Handle URL submission
+  const handlePhotoUrlSubmit = async (url) => {
+    if (!url) return;
+
+    setUploading(true);
+    setError('');
+
+    try {
+      const response = await fetch('/api/profile/photo-from-url', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ url })
+      });
+
+      if (!response.ok) throw new Error('Failed to download photo');
+
+      const data = await response.json();
+      setFormData(prev => ({ ...prev, photoUrl: data.photoUrl }));
+    } catch (err) {
+      setError('Error downloading photo');
+      console.error('Error:', err);
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -156,14 +222,32 @@ const ProfileEdit = () => {
               placeholder="Tell us about yourself"
             />
 
-            <TextField
-              fullWidth
-              label="Photo URL"
-              name="photoUrl"
-              value={formData.photoUrl}
-              onChange={handleChange}
-              placeholder="Link to your profile photo"
-            />
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+              <TextField
+                fullWidth
+                label="Photo URL"
+                name="photoUrl"
+                value={formData.photoUrl}
+                onChange={handleChange}
+                placeholder="Link to your profile photo"
+              />
+              <input
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                ref={fileInputRef}
+                onChange={handleFileUpload}
+              />
+              <IconButton
+                color="primary"
+                aria-label="upload picture"
+                component="span"
+                onClick={() => fileInputRef.current.click()}
+                disabled={uploading}
+              >
+                <PhotoCamera />
+              </IconButton>
+            </Box>
 
             <Box>
               <Typography variant="h6" gutterBottom>

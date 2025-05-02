@@ -2,6 +2,10 @@ import express from 'express';
 import auth from '../middleware/auth.js';
 import User from '../models/User.js';
 import Follow from '../models/Follow.js';
+import { upload, downloadImage } from '../middleware/uploadMiddleware.js';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 
 const router = express.Router();
 
@@ -15,9 +19,61 @@ router.get('/me', auth, async (req, res) => {
         { model: User, as: 'following', attributes: ['id', 'name'] }
       ]
     });
+
+    // Check if user has a profile photo in the profile_photos directory
+    if (user.photoUrl) {
+      const photoFileName = path.basename(user.photoUrl);
+      const photoPath = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../profile_photos', photoFileName);
+      
+      console.info('Photo path:', photoPath);
+      console.info('photoFileName:', photoFileName);
+
+      // If photo exists, set the full URL with server address
+      if (fs.existsSync(photoPath)) {
+        const serverAddress = process.env.SERVER_URL || `http://localhost:${process.env.PORT || 3000}`;
+        user.photoUrl = `${serverAddress}/profile_photos/${photoFileName}`;
+      }
+    }
+
     res.json(user);
   } catch (error) {
     res.status(500).json({ message: 'Error fetching profile' });
+  }
+});
+
+// Handle file upload
+router.post('/upload-photo', auth, upload.single('photo'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+    // Update user's photoUrl with the new filename including server address
+    const serverAddress = process.env.SERVER_URL || `http://localhost:${process.env.PORT || 3000}`;
+    const photoUrl = `${serverAddress}/profile_photos/${req.file.filename}`;
+    req.user.photoUrl = photoUrl;
+    await req.user.save();
+    res.json({ photoUrl });
+  } catch (error) {
+    res.status(500).json({ message: 'Error uploading file' });
+  }
+});
+
+// Handle photo URL
+router.post('/photo-from-url', auth, async (req, res) => {
+  try {
+    const { url } = req.body;
+    if (!url) {
+      return res.status(400).json({ message: 'URL is required' });
+    }
+
+    const filename = await downloadImage(url);
+    const serverAddress = process.env.SERVER_URL || `http://localhost:${process.env.PORT || 3000}`;
+    const photoUrl = `${serverAddress}/profile_photos/${filename}`;
+    req.user.photoUrl = photoUrl;
+    await req.user.save();
+    res.json({ photoUrl });
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Error downloading image' });
   }
 });
 
