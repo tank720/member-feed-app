@@ -1,89 +1,142 @@
 import express from 'express';
-import { Op } from 'sequelize';
+import { Op, Sequelize } from 'sequelize';
 import User from '../models/User.js';
+import Follow from '../models/Follow.js';
 import auth from '../middleware/auth.js';
 
 const router = express.Router();
 
-// Get public feed of user profiles (with pagination and optional tag filtering)
+// Get paginated list of users
 router.get('/', auth, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
+    const limit = 9; // Number of users per page
     const offset = (page - 1) * limit;
-    const tag = req.query.tag;
+    const tags = req.query.tags ? req.query.tags.split(',') : null;
 
-    let whereClause = {
+    const whereClause = {
       id: { [Op.ne]: req.user.id } // Exclude current user
     };
 
-    // Add tag filter if provided
-    if (tag) {
+    // Add tags filter if provided
+    if (tags && tags.length > 0) {
+      // Convert tags array to JSON string and convert to lowercase
+      const tagsJson = JSON.stringify(tags.map(tag => tag.toLowerCase()));
+      // Use SQLite's json_each and LOWER functions to check if interests array contains any of the specified tags (case-insensitive)
       whereClause.interests = {
-        [Op.contains]: [tag]
+        [Op.and]: [
+          { [Op.not]: null },  // Ensure interests is not null
+          Sequelize.literal(`EXISTS (SELECT 1 FROM json_each(interests) WHERE LOWER(json_each.value) IN (SELECT value FROM json_each('${tagsJson}')))`)
+        ]
       };
     }
 
-    const { count, rows } = await User.findAndCountAll({
+    const users = await User.findAll({
       where: whereClause,
-      attributes: { exclude: ['password'] },
+      attributes: ['id', 'name', 'headline', 'bio', 'photoUrl', 'interests'],
       limit,
       offset,
-      order: [['createdAt', 'DESC']],
-      include: [
-        {
-          model: User,
-          as: 'followers',
-          attributes: ['id'],
-          through: { attributes: [] }
-        }
-      ]
+      include: [{
+        model: User,
+        as: 'followers',
+        attributes: ['id'],
+        through: { attributes: [] }
+      }]
     });
 
-    // Add isFollowing field to each user
-    const users = rows.map(user => {
+    // Transform the response to match frontend expectations
+    const serverAddress = process.env.SERVER_URL || `http://localhost:${process.env.PORT || 3000}`;
+    const transformedUsers = users.map(user => {
       const userData = user.toJSON();
-      userData.isFollowing = userData.followers.some(follower => follower.id === req.user.id);
-      delete userData.followers; // Remove followers array from response
-      return userData;
+      // Handle avatar URL - if photoUrl exists and is a full URL, use it directly
+      // otherwise construct the URL using serverAddress
+      let avatar = userData.photoUrl;
+      if (!avatar) {
+        avatar = `${serverAddress}/profile_photos/default.png`;
+      } else if (!avatar.startsWith('http')) {
+        avatar = `${serverAddress}${avatar}`;
+      }
+      return {
+        id: userData.id,
+        name: userData.name,
+        headline: userData.headline,
+        bio: userData.bio,
+        avatar,
+        interests: userData.interests || [],
+        isFollowing: userData.followers.some(follower => follower.id === req.user.id)
+      };
     });
 
-    res.json({
-      users,
-      totalPages: Math.ceil(count / limit),
-      currentPage: page,
-      totalUsers: count
-    });
+    res.json(transformedUsers);
   } catch (error) {
-    console.error('Feed error:', error);
-    res.status(500).json({ message: 'Error fetching feed' });
+    console.error('Error fetching users:', error);
+    res.status(500).json({ message: 'Error fetching users' });
   }
 });
 
-// Get all unique tags from users
-router.get('/tags', auth, async (req, res) => {
+// Follow a user
+router.post('/:userId/follow', auth, async (req, res) => {
   try {
-    const users = await User.findAll({
-      attributes: ['interests'],
-      where: {
-        interests: {
-          [Op.not]: null
-        }
-      }
-    });
+    const { userId } = req.params;
+    
+    // Check if user exists
+    const userToFollow = await User.findByPk(userId);
+    if (!userToFollow) {
+      return res.status(404).json({ message: 'User not found' });
+    }
 
-    // Collect all unique tags
-    const tags = new Set();
-    users.forEach(user => {
-      if (Array.isArray(user.interests)) {
-        user.interests.forEach(tag => tags.add(tag));
-      }
-    });
+    // Prevent self-following
+    if (userId === req.user.id.toString()) {
+      return res.status(400).json({ message: 'Cannot follow yourself' });
+    }
 
-    res.json(Array.from(tags));
+    // Create new follow relationship
+    await Follow.create({
+      followerId: req.user.id,
+      followingId: userId
+    });
+    res.json({ message: 'Followed successfully' });
   } catch (error) {
-    console.error('Tags error:', error);
-    res.status(500).json({ message: 'Error fetching tags' });
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      return res.status(400).json({ message: 'Already following this user' });
+    }
+    console.error('Error following user:', error);
+    res.status(500).json({ message: 'Error following user' });
+  }
+});
+
+// Unfollow a user
+router.delete('/:userId/unfollow', auth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Check if user exists
+    const userToUnfollow = await User.findByPk(userId);
+    if (!userToUnfollow) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Prevent self-unfollowing
+    if (userId === req.user.id.toString()) {
+      return res.status(400).json({ message: 'Cannot unfollow yourself' });
+    }
+
+    // Check if following and unfollow
+    const result = await Follow.destroy({
+      where: {
+        followerId: req.user.id,
+        followingId: userId
+      }
+    });
+
+    if (result === 0) {
+      return res.status(400).json({ message: 'Not following this user' });
+    }
+
+    res.json({ message: 'Unfollowed successfully' });
+  } catch (error) {
+    console.error('Error unfollowing user:', error);
+    res.status(500).json({ message: 'Error unfollowing user' });
   }
 });
 
