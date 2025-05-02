@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Grid, Typography, Button, Card, CardContent, CardMedia, CardActions, Chip, Stack } from '@mui/material';
+import { Box, Grid, Typography, Button, Card, CardContent, CardMedia, CardActions, Chip, Stack, Autocomplete, TextField } from '@mui/material';
 import { useAuth } from '../../contexts/AuthContext';
 
 const Feed = () => {
@@ -7,16 +7,21 @@ const Feed = () => {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [followLoading, setFollowLoading] = useState({});
+  const [selectedTags, setSelectedTags] = useState([]);
   const { user } = useAuth();
 
   useEffect(() => {
     fetchUsers();
-  }, [page]);
+  }, [page, selectedTags]);
 
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/users?page=${page}`, {
+      const queryParams = new URLSearchParams({
+        page: page.toString(),
+        tags: selectedTags.join(',')
+      });
+      const response = await fetch(`/api/feed?${queryParams}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -40,7 +45,7 @@ const Feed = () => {
   const handleFollow = async (userId, isFollowing) => {
     setFollowLoading(prev => ({ ...prev, [userId]: true }));
     try {
-      const response = await fetch(`/api/users/${userId}/${isFollowing ? 'unfollow' : 'follow'}`, {
+      const response = await fetch(`/api/feed/${userId}/${isFollowing ? 'unfollow' : 'follow'}`, {
         method: isFollowing ? 'DELETE' : 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -71,6 +76,35 @@ const Feed = () => {
       <Typography variant="h4" gutterBottom>
         Discover Users
       </Typography>
+
+      <Box sx={{ mb: 3 }}>
+        <Autocomplete
+          multiple
+          freeSolo
+          options={[]}
+          value={selectedTags}
+          onChange={(event, newValue) => setSelectedTags(newValue)}
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              variant="outlined"
+              label="Filter by Interest Tags"
+              placeholder="Enter tags and press Enter to add"
+              fullWidth
+            />
+          )}
+          renderTags={(value, getTagProps) =>
+            value.map((option, index) => (
+              <Chip
+                label={option}
+                {...getTagProps({ index })}
+                color="primary"
+                variant="outlined"
+              />
+            ))
+          }
+        />
+      </Box>
       
       <Grid container spacing={3}>
         {users.map((profile) => (

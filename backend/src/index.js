@@ -8,7 +8,6 @@ import dotenv from 'dotenv';
 import authRoutes from './routes/auth.js';
 import profileRoutes from './routes/profile.js';
 import feedRoutes from './routes/feed.js';
-import userRoutes from './routes/users.js';
 
 // Database
 import './config/database.js';
@@ -33,7 +32,6 @@ app.use('/profile_photos', express.static(path.join(__dirname, '../profile_photo
 app.use('/api/auth', authRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/feed', feedRoutes);
-app.use('/api/users', userRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
