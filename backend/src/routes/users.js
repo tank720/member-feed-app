@@ -17,7 +17,7 @@ router.get('/', auth, async (req, res) => {
       where: {
         id: { [Op.ne]: req.user.id } // Exclude current user
       },
-      attributes: ['id', 'name', 'bio', 'photoUrl', 'interests'],
+      attributes: ['id', 'name', 'headline', 'bio', 'photoUrl', 'interests'],
       limit,
       offset,
       include: [{
@@ -43,6 +43,7 @@ router.get('/', auth, async (req, res) => {
       return {
         id: userData.id,
         name: userData.name,
+        headline: userData.headline,
         bio: userData.bio,
         avatar,
         interests: userData.interests || [],

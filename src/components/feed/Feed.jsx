@@ -83,15 +83,44 @@ const Feed = () => {
                 alt={profile.name}
               />
               <CardContent>
-                <Typography gutterBottom variant="h5" component="div">
-                  {profile.name}
-                </Typography>
-                <Typography variant="body2" color="text.secondary" gutterBottom>
+                <Box sx={{ borderBottom: '1px solid rgba(0, 0, 0, 0.12)', pb: 2, mb: 2 }}>
+                  <Typography 
+                    gutterBottom 
+                    variant="h5" 
+                    component="div"
+                    sx={{ 
+                      fontWeight: 600,
+                      color: 'primary.main'
+                    }}
+                  >
+                    {profile.name}
+                  </Typography>
+                  {profile.headline && (
+                    <Typography 
+                      variant="subtitle1" 
+                      sx={{ 
+                        color: 'text.primary',
+                        fontStyle: 'italic',
+                        fontSize: '1.1rem'
+                      }}
+                    >
+                      {profile.headline}
+                    </Typography>
+                  )}
+                </Box>
+                <Typography 
+                  variant="body2" 
+                  color="text.secondary" 
+                  sx={{ 
+                    lineHeight: 1.6,
+                    mb: 2
+                  }}
+                >
                   {profile.bio}
                 </Typography>
-                <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+                <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: 2, maxWidth: '100%' }}>
                   {profile.interests.map((interest, index) => (
-                    <Chip key={index} label={interest} size="small" />
+                    <Chip key={index} label={interest} size="small" sx={{ mb: 0 }} />
                   ))}
                 </Stack>
               </CardContent>
